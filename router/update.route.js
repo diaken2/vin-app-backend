@@ -80,12 +80,7 @@ router.post("/getInfromFromVin", async (req, res) => {
     if (!user.lastRequest || now - user.lastRequest >= 24 * 60 * 60 * 1000) {
       await User.updateOne({ login }, { dailyRequests: 0 });
     }
-    if (
-      !user.lastRequest ||
-      now - user.lastRequest >= 7 * 24 * 60 * 60 * 1000
-    ) {
-      await User.updateOne({ login }, { weeklyRequests: 0 });
-    }
+
     if (
       !user.lastRequest ||
       now - user.lastRequest >= 30 * 24 * 60 * 60 * 1000
@@ -93,10 +88,7 @@ router.post("/getInfromFromVin", async (req, res) => {
       await User.updateOne({ login }, { monthlyRequests: 0 });
     }
     await User.updateOne({ login }, { dailyRequests: user.dailyRequests + 1 });
-    await User.updateOne(
-      { login },
-      { weeklyRequests: user.weeklyRequests + 1 }
-    );
+    await User.updateOne({ login }, { allRequests: user.allRequests + 1 });
     await User.updateOne(
       { login },
       { monthlyRequests: user.monthlyRequests + 1 }
@@ -220,7 +212,7 @@ router.post("/createAccount", async (req, res) => {
       email,
       lastEntry: formattedDate,
       dailyRequests: 0,
-      weeklyRequests: 0,
+      allRequests: 0,
       monthlyRequests: 0,
       lastRequest: new Date(),
     });
