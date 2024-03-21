@@ -15,5 +15,9 @@ const schema = new Schema({
   lastEntry: {
     type: String,
   },
+  dailyRequests: { type: Number, default: 0 },
+  allRequests: { type: Number, default: 0 },
+  monthlyRequests: { type: Number, default: 0 },
+  lastRequest: { type: Date },
 });
 module.exports = model("User", schema);
