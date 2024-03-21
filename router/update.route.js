@@ -72,8 +72,37 @@ router.post("/adminSign", async (req, res) => {
 
 router.post("/getInfromFromVin", async (req, res) => {
   try {
-    const { vin } = req.body;
+    const { vin, login } = req.body;
     console.log("sdsd");
+    const user = await User.findOne({ login });
+    const now = new Date();
+
+    if (!user.lastRequest || now - user.lastRequest >= 24 * 60 * 60 * 1000) {
+      await User.updateOne({ login }, { dailyRequests: 0 });
+    }
+    if (
+      !user.lastRequest ||
+      now - user.lastRequest >= 7 * 24 * 60 * 60 * 1000
+    ) {
+      await User.updateOne({ login }, { weeklyRequests: 0 });
+    }
+    if (
+      !user.lastRequest ||
+      now - user.lastRequest >= 30 * 24 * 60 * 60 * 1000
+    ) {
+      await User.updateOne({ login }, { monthlyRequests: 0 });
+    }
+    await User.updateOne({ login }, { dailyRequests: user.dailyRequests + 1 });
+    await User.updateOne(
+      { login },
+      { weeklyRequests: user.weeklyRequests + 1 }
+    );
+    await User.updateOne(
+      { login },
+      { monthlyRequests: user.monthlyRequests + 1 }
+    );
+    await User.updateOne({ login }, { lastRequest: now });
+
     const request1 = await axios.get(
       `https://parser-api.com/parser/gibdd_api/?key=4379c0f1c5eca04a475706f7c249b80d&vin=${vin}`
     );
@@ -81,18 +110,32 @@ router.post("/getInfromFromVin", async (req, res) => {
     const request2 = await axios.get(
       `https://parser-api.com/parser/rsa_api/?key=4379c0f1c5eca04a475706f7c249b80d&vin=${vin}`
     );
-    const gibdd = request1.data;
-    const rsa = request2.data;
+    let gibdd = request1.data.accidents;
+    let rsa = request2.data;
     console.log(gibdd);
     console.log(
       "================================================================"
     );
-    let svgResponse;
-    if (gibdd.damageSvg) {
-      const requestSvg = await axios.get(gibdd.damageSvg);
-      svgResponse = requestSvg.data;
-    }
 
+    let newGibdd = await Promise.allSettled(
+      gibdd.map(async (item) => {
+        if (item.damageSvg) {
+          try {
+            const requestSvg = await axios.get(item.damageSvg);
+            return { ...item, damageSvg: requestSvg.data };
+          } catch (error) {
+            console.error("Ошибка при получении SVG:", error);
+            return { ...item, damageSvgError: error };
+          }
+        }
+        return item;
+      })
+    );
+
+    newGibdd = newGibdd.map((result) =>
+      result.status === "fulfilled" ? result.value : result.reason
+    );
+    console.log(newGibdd);
     console.log(rsa);
     const errors = [gibdd.error, rsa.error].filter(
       (item) => item != undefined || item != null
@@ -100,8 +143,8 @@ router.post("/getInfromFromVin", async (req, res) => {
 
     res.json({
       rsa: rsa.policies,
-      gibdd: gibdd.accidents,
-      svgItem: svgResponse,
+      gibdd: newGibdd,
+
       message: errors,
     });
   } catch (e) {
@@ -176,14 +219,19 @@ router.post("/createAccount", async (req, res) => {
       password: pass,
       email,
       lastEntry: formattedDate,
+      dailyRequests: 0,
+      weeklyRequests: 0,
+      monthlyRequests: 0,
+      lastRequest: new Date(),
     });
     console.log(user);
     await user.save();
     const candidateTwo = await User.findOne({ email });
     console.log(candidateTwo);
-    res
-      .status(201)
-      .json({ msg: "Пользователь создан", inform: candidateTwo.login });
+    res.status(201).json({
+      msg: "Пользователь создан",
+      inform: candidateTwo.login,
+    });
   } catch (e) {
     console.log(e);
     return;
